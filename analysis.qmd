@@ -1,0 +1,611 @@
+---
+title: "Bayesian Inference with Gibbs, Metropolis-Hastings and CAVI"
+author: "Kunze (Charlotte) Lyu"
+format:
+  html:
+    toc: true
+    embed-resources: true
+---
+
+An individual coursework study, curated for this portfolio. Models use simulated educational data. Original assignment instructions are omitted. See docs/REVIEW.md for corrections and validation scope.
+
+```{r}
+X <- scan("data/scores.txt", quiet=TRUE)
+x <- scan("data/group-x.txt", quiet=TRUE)
+y <- scan("data/group-y.txt", quiet=TRUE)
+```
+
+## Problem 1
+
+### Part (a): Posterior distribution of the precision
+
+By Bayes' theorem, the posterior distribution of the precision parameter $\tau$ is proportional to the product of the likelihood and the prior:
+$$
+p(\tau\mid\boldsymbol{x})\propto L(\tau)p(\tau).
+$$
+Since the observations are independent and $X_i\mid\tau\sim N(75,\frac{1}{\tau})$, the likelihood is
+$$
+\begin{aligned}
+L(\tau)
+&=\prod_{i=1}^{100}\frac{\sqrt{\tau}}{\sqrt{2\pi}}\exp
+\left[-\frac{\tau}{2}(x_i-75)^2\right]\\
+&\propto\tau^{50}\exp
+\left[-\frac{\tau}{2}\sum_{i=1}^{100}(x_i-75)^2\right].
+\end{aligned}
+$$
+The prior distribution is $\tau\sim\operatorname{Gamma}(2,1)$, using the shape-rate parameterisation. Hence,
+$$
+p(\tau)\propto\tau e^{-\tau}.
+$$
+Combining the likelihood and the prior, we obtain
+$$
+\begin{aligned}
+p(\tau\mid\boldsymbol{x}) &\propto L(\tau)p(\tau) \\
+&\propto\tau^{50}\exp\left[-\frac{\tau}{2}\sum_{i=1}^{100}(x_i-75)^2\right]\tau e^{-\tau}\\
+&\propto\tau^{51}\exp\left[-\tau\left(1+\frac{1}{2}\sum_{i=1}^{100}(x_i-75)^2\right)
+\right].
+\end{aligned}
+$$
+Recognising the kernel of a Gamma distribution, the posterior distribution is
+$$
+\boxed{
+\tau\mid\boldsymbol{x}\sim\operatorname{Gamma}\left(52,1+\frac{1}{2}\sum_{i=1}^{100}(x_i-75)^2\right).
+}
+$$
+Thus, the posterior follows a Gamma distribution with shape parameter 52 and rate parameter $1+\frac{1}{2}\sum_{i=1}^{100}(x_i-75)^2$.
+```{r}
+post_shape <- 2 + length(X)/2
+post_rate <- 1 + sum((X - 75)^2)/2
+c(shape = post_shape, rate = post_rate)
+```
+Using the observed data, the posterior distribution of the precision parameter is $\tau\mid\boldsymbol{x}\sim\operatorname{Gamma}(52, 2427.435)$, where the parameters are given in the shape-rate parameterisation.
+
+### Part (b): Posterior predictive distribution
+
+The posterior predictive distribution is obtained by integrating out the unknown precision parameter $\tau$:
+$$
+p(\tilde{x}\mid\boldsymbol{x})=\int_0^{\infty}p(\tilde{x}\mid\tau)p(\tau\mid\boldsymbol{x})\,d\tau
+$$
+From Part (a), the posterior distribution is $\tau\mid\boldsymbol{x}\sim\operatorname{Gamma}(\alpha,\beta)$, where $\alpha=52$ and $\beta=2427.435$. Since $\tilde{X}\mid\tau\sim N(75, 1/\tau)$, substituting the corresponding densities gives
+$$
+\begin{aligned}
+p(\tilde{x}\mid\boldsymbol{x})&=\int_0^\infty
+\frac{\sqrt{\tau}}{\sqrt{2\pi}}e^{-\frac{\tau}{2}(\tilde{x}-75)^2}\frac{\beta^\alpha}{\Gamma(\alpha)}\tau^{\alpha-1}e^{-\beta\tau}\,d\tau \\
+&=\frac{\beta^\alpha}{\Gamma(\alpha)\sqrt{2\pi}}\int_0^\infty\tau^{\alpha-\frac{1}{2}}\exp
+\left[
+-\tau\left(\beta+\frac{(\tilde{x}-75)^2}{2}\right)
+\right]\,d\tau.
+\end{aligned}
+$$
+Using the Gamma integral identity
+$$
+\int_0^\infty t^{k-1}e^{-ct}\,dt=\frac{\Gamma(k)}{c^k},
+$$
+we obtain
+$$
+\begin{aligned}
+p(\tilde{x}\mid\boldsymbol{x})&=\frac{\beta^\alpha}{\Gamma(\alpha)\sqrt{2\pi}}\frac{\Gamma(\alpha+\frac{1}{2})}{\left[\beta+\frac{(\tilde{x}-75)^2}{2}\right]^{\alpha+\frac{1}{2}}}\\
+&=\frac{\Gamma(\alpha+\frac{1}{2})}{\Gamma(\alpha)\sqrt{2\pi\beta}}
+\left[1+\frac{(\tilde{x}-75)^2}{2\beta}\right]^{-(\alpha+\frac{1}{2})}.
+\end{aligned}
+$$
+Comparing this expression with the given three-parameter t density,
+$$
+p(x\mid\nu,a,b)=\frac{\Gamma(\frac{\nu+1}{2})}{\Gamma(\frac{\nu}{2})\sqrt{\pi\nu}b}
+\left[
+1+\frac{1}{\nu}\left(\frac{x-a}{b}\right)^2
+\right]^{-\frac{\nu+1}{2}},
+$$
+we identify
+$$
+\nu=2\alpha,\qquad a=75,\qquad b=\sqrt{\frac{\beta}{\alpha}}.
+$$
+
+```{r}
+sqrt(post_rate/post_shape)
+```
+Substituting $\alpha=52$ and $\beta=2427.435$ gives
+$$
+\begin{aligned}
+\nu &= 104,\\a&=75,\\b&=\sqrt{\frac{2427.435}{52}}\approx6.8324.
+\end{aligned}
+$$
+Therefore, the posterior predictive distribution is
+$$
+\tilde{X}\mid\boldsymbol{x}\sim t(104,75,6.8324).
+$$
+This distribution accounts for uncertainty in the precision parameter when predicting a new student's exam score.
+
+## Problem 2
+
+### Part (a): Conditional distributions
+
+By Bayes' theorem, the joint posterior distribution is proportional to the product of the likelihood and the joint prior:
+$$
+p(\mu_1, \mu_2\mid\boldsymbol{x},\boldsymbol{y})\propto p(\boldsymbol{x}\mid\mu_1)p(\boldsymbol{y}\mid\mu_2)p(\mu_1,\mu_2).
+$$
+Since $X_i\sim N(\mu_1,1)$ and $Y_j\sim N(\mu_2, 1/2)$ independently, the likelihood is
+$$
+\begin{aligned}
+L(\mu_1,\mu_2)&\propto\exp\left[-\frac{1}{2}\sum_{i=1}^{100}(x_i-\mu_1)^2
+-\sum_{j=1}^{150}(y_j-\mu_2)^2\right]\\
+&\propto\exp\left[-\frac{100}{2}(\mu_1-\bar{x})^2-150(\mu_2-\bar{y})^2\right].
+\end{aligned}
+$$
+The joint prior is a bivariate normal distribution with mean vector $\boldsymbol0$ and covariance matrix
+$$
+\Sigma=\begin{pmatrix} \frac{3}{5}&-\frac{2}{5}\\ -\frac{2}{5}&\frac{3}{5}
+\end{pmatrix},\qquad
+\Sigma^{-1}=\begin{pmatrix} 3&2\\2&3
+\end{pmatrix}.
+$$
+Therefore, its density is proportional to
+$$
+p(\mu_1,\mu_2)\propto\exp\left[-\frac{1}{2}(3\mu_1^2+4\mu_1\mu_2+3\mu_2^2)\right].
+$$
+Combining the likelihood and the prior gives
+$$
+p(\mu_1,\mu_2\mid\boldsymbol{x},\boldsymbol{y})\propto
+\exp\left\{-\frac12\left[100(\mu_1-\bar{x})^2+300(\mu_2-\bar{y})^2+
+3\mu_1^2+4\mu_1\mu_2+3\mu_2^2
+\right]
+\right\}.
+$$
+For the full conditional distribution of $\mu_1$, retaining only the terms involving $\mu_1$yields
+$$
+\begin{aligned}
+p(\mu_1\mid\mu_2,\boldsymbol{x},\boldsymbol{y})&\propto\exp\left[
+-\frac{1}{2}\left(103\mu_1^2-2(100\bar{x}-2\mu_2)\mu_1\right)\right]\\
+&\propto\exp\left[-\frac{103}{2}\left(
+\mu_1-\frac{100\bar{x}-2\mu_2}{103}\right)^2\right].
+\end{aligned}
+$$
+Recognising the kernel of a normal distribution, we obtain
+$$
+\boxed{
+\mu_1\mid\mu_2,\boldsymbol{x},\boldsymbol{y}\sim N
+\left(\frac{100\bar{x}-2\mu_2}{103},\,\frac{1}{103}\right).
+}
+$$
+Similarly, retaining only the terms involving $\mu_2$,
+$$
+\begin{aligned}
+p(\mu_2\mid\mu_1,\boldsymbol{x},\boldsymbol{y})&\propto\exp\left[-\frac{1}{2}
+\left(303\mu_2^2-2(300\bar{y}-2\mu_1)\mu_2\right)\right]\\
+&\propto\exp\left[
+-\frac{303}{2}\left(\mu_2-\frac{300\bar{y}-2\mu_1}{303}\right)^2
+\right].
+\end{aligned}
+$$
+Hence,
+$$
+\boxed{
+\mu_2\mid\mu_1,\boldsymbol{x},\boldsymbol{y}\sim N\left(
+\frac{300\bar{y}-2\mu_1}{303},\,\frac{1}{303}
+\right).
+}
+$$
+Using the observed sample means $\bar{x}=2.728663$ and $\bar{y}=-3.159025$, the full conditional distributions become
+$$
+\boxed{
+\mu_1\mid\mu_2,\boldsymbol{x},\boldsymbol{y}\sim N\left(
+\frac{272.8663-2\mu_2}{103},\,\frac{1}{103}\right),\\
+\mu_2\mid\mu_1,\boldsymbol{x},\boldsymbol{y}\sim N\left(
+\frac{-947.7075-2\mu_1}{303},\,\frac{1}{303}\right).
+}
+$$
+
+### Part (b): Gibbs sampling implementation
+
+Using the full conditional distributions derived in Part (a), a Gibbs sampler is implemented by alternately updating $\mu_1$ and $\mu_2$. Two chains are initialised at $(0,0)$ and $(2,-1)$, respectively, and each is run for $1,000$ iterations.
+```{r}
+set.seed(123)
+n_iter <- 1000
+xbar <- mean(x)
+ybar <- mean(y)
+
+gibbs <- function(init, n_iter) {
+  chain <- matrix(NA_real_, nrow = n_iter + 1, ncol = 2)
+  colnames(chain) <- c("mu1", "mu2")
+  chain[1, ] <- init
+  for (t in 1:n_iter) {
+    chain[t+1, 1] <- rnorm(1, (100*xbar-2*chain[t, 2])/103, sqrt(1/103))
+    chain[t+1, 2] <- rnorm(1, (300*ybar-2*chain[t+1, 1])/303, sqrt(1/303))
+  }
+  chain
+}
+
+chain1 <- gibbs(c(0, 0), n_iter)
+chain2 <- gibbs(c(2, -1), n_iter)
+```
+```{r}
+#| fig-cap: Figure 1. Trace plots of two Gibbs chains for $\mu_1$ and $\mu_2$, initialised at (0, 0) and (2, -1) respectively. 
+cols <- c("#7B3FBF", "#D55E00")
+layout(matrix(1:3, ncol = 1), heights = c(4, 4, 0.65))
+par(las = 1, mgp = c(2.2, 0.6, 0))
+
+for (j in 1:2) {
+  par(mar = if (j == 1) c(2, 4, 2, 1) else c(3.5, 4, 2, 1))
+  ylim_j <- range(chain1[-1, j], chain2[-1, j])
+  plot(1:n_iter, chain1[-1, j], type = "l",
+       col = cols[1], lwd = 0.8, ylim = ylim_j,
+       xlab = if (j == 2) "Iteration" else "",
+       ylab = colnames(chain1)[j],
+       main = paste("Gibbs trace plot:", colnames(chain1)[j]),
+       yaxt = if (j == 2) "n" else "s")
+  lines(1:n_iter, chain2[-1, j], col = cols[2], lwd = 0.8)
+  if (j == 2) axis(2, at = seq(-3.3, -3.0, 0.1), las = 1)
+}
+
+par(mar = c(0, 0, 0, 0))
+plot.new()
+legend("center", legend = c("Chain 1", "Chain 2"),
+       col = cols, lty = 1, lwd = 1.5,
+       horiz = TRUE, bty = "n", cex = 0.9)
+
+layout(1)
+par(mar = c(5, 4, 4, 2) + 0.1, las = 0, mgp = c(3, 1, 0))
+```
+Trace plots of two Gibbs sampling chains for $\mu_1$ and $\mu_2$, each run for $1,000$ iterations from initial values $((0,0))$ and $((2, -1))$, respectively.
+
+Both chains fluctuate around similar, stable levels for each parameter, with substantial overlap and no apparent long-term trends or prolonged periods of poor movement. These patterns suggest good mixing and are consistent with convergence towards the target posterior distribution.
+
+
+### Part (c): Posterior summaries from Gibbs sampling
+
+For posterior inferences, the first 100 iterations of Gibbs Chain 1 are discarded as burn-in. The remaining 900 samples are used to estimate the marginal posterior means and 90% equal-tailed credible intervals, using sample averages and the 5th and 95th percentiles, respectively.
+```{r}
+burn_in <- 100
+gibbs_samples <- chain1[-(1:(burn_in+1)),]
+
+post_means <- colMeans(gibbs_samples)
+cred_intervals <- apply(gibbs_samples, 2, quantile, probs = c(0.05, 0.95))
+
+round(rbind(Mean = post_means,
+            Lower90 = cred_intervals[1,],
+            Upper90 = cred_intervals[2,]), 4)
+```
+```{r}
+#| fig-cap: Figure 2. Estimated marginal posterior densities of $\mu_1$ and $\mu_2$ from Gibbs Chain 1. Dashed lines indicate posterior means.
+par(mfrow = c(1, 2), mar = c(4, 4, 2.5, 1), las = 1,
+    cex.axis = 0.9, cex.lab = 0.95, cex.main = 0.95)
+
+for (j in 1:2) {
+  d <- density(gibbs_samples[, j])
+  plot(d, col = "#7B3FBF", lwd = 2,
+       main = paste("Posterior density:", colnames(gibbs_samples)[j]),
+       xlab = colnames(gibbs_samples)[j], ylab = "Density")
+  abline(v = post_means[j], col = "#626772", lty = 2, lwd = 1.5)
+}
+par(mfrow = c(1, 1), las = 0, cex.axis = 1, cex.lab = 1, cex.main = 1)
+```
+
+The estimated posterior mean of $\mu_1$ is $2.7145$, with a 90% credible interval of $(2.5548, 2.8730)$. For $\mu_2$, the posterior mean is $-3.1443
+, with a 90% credible interval of $(-3.2430, -3.0515)$. Both marginal posterior distributions are approximately unimodal and bell-shaped, with $\mu_2$ exhibiting less posterior uncertainty than $\mu_2$.
+
+### Part (d): MH implementation
+
+The Metropolis-Hastings algorithm is implemented using independent normal random-walk proposals with standard deviation $0.1$ for each parameter. Since the proposal distribution is symmetric, the acceptance probability depends only on the ratio of the target posterior densities. Two chains are run for 4,000 iterations from initial values $(0,0)$ and $(2,-1)$, respectively.
+
+```{r}
+set.seed(456)
+n_mh <- 4000
+
+log_target <- function(z) {
+  -0.5 * (100*(z[1]-xbar)^2 + 300*(z[2]-ybar)^2 + 3 *z[1]^2
+          + 4*z[1]*z[2] + 3*z[2]^2)
+}
+
+mh <- function(init, n_iter) {
+  chain <- matrix(NA_real_, nrow = n_iter+1, ncol = 2)
+  colnames(chain) <- c("mu1", "mu2")
+  chain[1, ] <- init
+  accepted <- 0
+  
+  for (t in 1:n_iter) {
+    current <- chain[t, ]
+    proposal <- rnorm(2, mean = current, sd = 0.1)
+    log_ratio <- log_target(proposal) - log_target(current)
+    
+    if (log(runif(1)) < log_ratio) {
+      chain[t+1, ] <- proposal
+      accepted <- accepted + 1
+    } else {
+      chain[t+1, ] <- current
+    }
+  }
+  list(chain = chain, acceptance = accepted/n_iter)
+}
+
+mh1 <- mh(c(0, 0), n_mh)
+mh2 <- mh(c(2, -1), n_mh)
+c(Chain1 = mh1$acceptance, Chain2 = mh2$acceptance)
+```
+```{r}
+#| fig-cap: Trace plots of two MH chains for $\mu_1$ and $\mu_2$, initialised at $(0,0)$ and $(2, -1)$, respectively. Dashed vertical lines indicate the adopted burn-in period of 200 iterations.
+cols <- c("#7545B5", "#D55E00")
+layout(matrix(1:3, ncol = 1), heights = c(4, 4, 0.65))
+par(las = 1, mgp = c(2.2, 0.6, 0))
+
+for (j in 1:2) {
+  par(mar = if (j == 1) c(2, 4, 2, 1) else c(3.5, 4, 2, 1))
+  ylim_j <- range(mh1$chain[, j], mh2$chain[, j])
+  
+  plot(0:n_mh, mh1$chain[, j], type = "l", col = cols[1],
+       lwd = 0.8, ylim = ylim_j,
+       xlab = if (j == 2) "Iteration" else "",
+       ylab = colnames(mh1$chain)[j],
+       main = paste("MH trace plot:", colnames(mh1$chain)[j]))
+  lines(0:n_mh, mh2$chain[, j], col = cols[2], lwd = 0.8)
+  abline(v = 200, col = "grey", lty = 2, lwd = 1.5)
+}
+
+par(mar = c(0, 0, 0, 0))
+plot.new()
+abline(v = 200, col = "grey", lty = 2, lwd = 1.5)
+legend("center", c("Chain 1", "Chain 2"), col = cols,
+       lty = 1, lwd = 1.5, horiz = TRUE, bty = "n", cex = 0.9)
+
+
+layout(1)
+par(mar = c(5, 4, 4, 2) + 0.1, las = 0, mgp = c(3, 1, 0))
+```
+Both MH chains exhibit an initial transient period, with Chain 1 taking longer to reach the main posterior region due to its more distant starting point. After approximately 150 iterations, the chains overlap substantially and fluctuate around stable levels for both parameters, with no apparent long-term trends. This suggests satisfactory mixing after burn-in and is consistent with convergence towards the target posterior distribution.
+
+### Part (e): Posterior summaries from MH
+
+For posterior inference, the first 200 iterations of MH Chain 1 are discarded as burn-in, based on the trace plots in Part (d). The remaining 3,800 samples are used to estimate the marginal posterior means and 90% equal-tailed credible intervals using sample averages and the 5th and 95th percentiles, respectively.
+
+```{r}
+burn_mh <- 200
+mh_samples <- mh1$chain[-(1:(burn_mh+1)), ]
+
+mh_means <- colMeans(mh_samples)
+mh_intervals <- apply(mh_samples, 2, quantile, probs = c(0.05, 0.95))
+
+round(rbind(Mean = mh_means, Lower90 = mh_intervals[1, ],
+            Upper90 = mh_intervals[2, ]), 4)
+```
+```{r}
+#| fig-cap: Figure 4. Estimated marginal posterior densities of $\mu_1$ and $\mu_2$ from MH Chain 1. Dashed lines indicate posterior means.
+par(mfrow = c(1, 2), mar = c(4, 4, 2.5, 1), las = 1,
+    cex.axis = 0.9, cex.lab = 0.95, cex.main = 0.95)
+
+for (j in 1:2) {
+  d <- density(mh_samples[, j])
+  plot(d, col = "#7545B5", lwd =2,
+       main = paste("MH posterior density:", colnames(mh_samples)[j]),
+       xlab = colnames(mh_samples)[j], ylab = "Density")
+  abline(v = mh_means[j], col = "#626772", lty = 2, lwd = 1.5)
+}
+
+par(mfrow = c(1, 1), las = 0, cex.axis = 1, cex.lab =1 , cex.main = 1)
+```
+The estimated posterior mean of $\mu_1$ is $2.7072$, with a 90% equal-tailed credible interval of $2.5489, 2.8654$. For $\mu_2$, the posterior mean is $-3.1486$, with a corresponding 90% credible interval of $(-3.2364, -3.0596)$. These estimates are close to the Gibbs sampling results in Part (c), with small differences attributable to Monte Carlo variability.
+
+### Part (f): Optimal variational factors
+
+Under the mean-field assumption, the joint posterior distribution is approximately by
+$$
+q(\mu_1,\mu_2)=q_{\mu_1}(\mu_1)q_{\mu_2}(\mu_2).
+$$
+The optimal variational factors satisfy
+$$
+\begin{aligned}
+\log q_{\mu_1}^*(\mu_1)&=\mathbb{E}_{q_{\mu_2}}\left[
+\log p(\boldsymbol{x},\boldsymbol{y},\mu_1,\mu_2)\right]+\text{constant},\\
+\log q_{\mu_2}^*(\mu_2)&=\mathbb{E}_{q_{\mu_1}}\left[
+\log p(\boldsymbol{x},\boldsymbol{y},\mu_1,\mu_2)\right]+\text{constant}.
+\end{aligned}
+$$
+From Part (a), the log joint density, up to terms independent of $\mu_1$ and $\mu_2$, is
+$$
+\begin{aligned}
+\log p(\boldsymbol{x},\boldsymbol{y},\mu_1,\mu_2)=&- \frac{1}{2}\left(
+103\mu_1^2+303\mu_2^2+4\mu_1\mu_2
+\right)\\
+&+ 100\bar{x}\mu_1+300\bar{y}\mu_2+C.
+\end{aligned}
+$$
+Let $m_1=\mathbb{E}_{q_{\mu_1}}[\mu_1]$ and $m_2=\mathbb{E}_{q_{\mu_2}}[\mu_2]$.
+
+Taking the expectation with respect to $q_{\mu_2}$ and retaining terms involving $\mu_1$,
+
+$$
+\begin{aligned}
+\log q_{\mu_1}^*(\mu_1)
+&=-\frac{103}{2}\mu_1^2+(100\bar{x}-2m_2)\mu_1+C\\
+&=-\frac{103}{2}\left(\mu_1-\frac{100\bar{x}-2m_2}{103}\right)^2+C'.
+\end{aligned}
+$$
+
+Recognising the kernel of a normal distribution, we obtain
+
+$$
+\boxed{
+q_{\mu_1}^*(\mu_1)
+=N\left(\frac{100\bar{x}-2m_2}{103},\frac{1}{103}\right).
+}
+$$
+
+Similarly, taking the expectation with respect to $q_{\mu_1}$,
+
+$$
+\begin{aligned}
+\log q_{\mu_2}^*(\mu_2)
+&=-\frac{303}{2}\mu_2^2+(300\bar{y}-2m_1)\mu_2+C\\
+&=-\frac{303}{2}\left(\mu_2-\frac{300\bar{y}-2m_1}{303}\right)^2+C'.
+\end{aligned}
+$$
+
+Therefore,
+
+$$
+\boxed{
+q_{\mu_2}^*(\mu_2)
+=N\left(\frac{300\bar{y}-2m_1}{303},\frac{1}{303}\right).
+}
+$$
+
+### Part (g): ELBO
+
+The evidence lower bound (ELBO) is defined as
+$$
+\mathcal L(q)=\mathbb{E}_q[\log p(\boldsymbol{x},\boldsymbol{y},\mu_1,\mu_2)]
+-\mathbb{E}[\log q(\mu_1,\mu_2)].
+$$
+Under the mean-field approximation, let
+$$
+q(\mu_1,\mu_2)=q_{\mu_1}(\mu_1)q_{\mu_2}(\mu_2),
+$$
+where
+$$
+q_{\mu_1}(\mu_1)=N(m_1,s_1^2),\qquad q_{\mu_2}(\mu_2)=N(m_2,s_2^2).
+$$
+From Part (f), the log joint density, up to an additive constant, is
+$$
+\begin{aligned}
+\log p(\boldsymbol{x},\boldsymbol{y},\mu_1,\mu_2)=&- \frac{1}{2}\left(
+103\mu_1^2+303\mu_2^2+4\mu_1\mu_2
+\right)\\
+&+ 100\bar{x}\mu_1+300\bar{y}\mu_2+C.
+\end{aligned}
+$$
+Using the expectations
+$$
+\begin{aligned}
+\mathbb{E}_q[\mu_1]&=m_1,\qquad\mathbb{E}_q[\mu_1^2]=m_1^2+s_1^2,\\
+\mathbb{E}_q[\mu_2]&=m_2,\qquad\mathbb{E}_q[\mu_2^2]=m_2^2+s_2^2,\\
+\mathbb{E}_q[\mu_1\mu_2]&=m_1m_2,
+\end{aligned}
+$$
+where the last equality follows from the mean-field independence assumption, we obtain
+$$
+\begin{aligned}
+\mathbb{E}_q[\log p]=&-\frac{1}{2}\left[103(m_1^2+s_1^2)+303(m_2^2+s_2^2)
++4m_1m_2\right]\\
+&+100\bar{x}m_1+300\bar{y}m_2+C.
+\end{aligned}
+$$
+For the two independent normal variational factors, the entropy term is
+$$
+\begin{aligned}
+-\mathbb{E}_q[\log q]&=-\mathbb{E}_q[\log q_{\mu_1}]-\mathbb{E}_q[\log q_{\mu_2}]\\
+&=\frac{1}{2}\log(2\pi es_1^2)+\frac{1}{2}\log(2\pi es_2^2)\\
+&=\frac{1}{2}\log(s_1^2)+\frac{1}{2}\log(s_2^2)+C'.
+\end{aligned}
+$$
+Combining the expected log joint density and the entropy term gives the ELBO, up to an additive constant:
+$$
+\boxed{
+\begin{aligned}
+\mathcal{L}(q)&=-\frac{1}{2}\left[103(m_1^2+s_1^2)+303(m_2^2+s_2^2)
++4m_1m_2\right]\\
+&+100\bar{x}m_1+300\bar{y}m_2\\
+&+\frac{1}{2}\log(s_1^2)+\frac{1}{2}\log(s_2^2)+C.
+\end{aligned}
+}
+$$
+From Part (f), the optimal variational variances are $s_1^2=1/103$ and $s_2^2=1/303$. Since these are fixed, the ELBO used for CAVI can be simplified to
+$$
+\boxed{
+\mathcal{L}(m_1,m_2)=-\frac{103}{2}m_1^2-
+\frac{303}{2}m_2^2-2m_1m_2+100\bar{x}m_1+300\bar{y}m_2+C.
+}
+$$
+The corresponding coordinate updates for the variational means are
+$$
+\boxed{
+\begin{aligned}
+m_1^{(t+1)}&=\frac{100\bar{x}-2m_2^{(t)}}{103},\\
+m_2^{(t+1)}&=\frac{300\bar{y}-2m_1^{(t+1)}}{303}.
+\end{aligned}
+}
+$$
+
+### Part (h): CAVI implementation
+
+The CAVI algorithm is implemented using the coordinate updates derived in Part (f), with the ELBO evaluated using the expression obtained in Part (g). The algorithm terminates when the change in ELBO between successive iterations is less than $10^{-5}$, or when 100 iterations have been completed. Two runs are initialised at $(m_1,m_2)=(0,0)$ and $(2,-1)$, respectively.
+```{r}
+elbo <- function(m1, m2) {
+  -103*m1^2/2 - 303*m2^2/2 - 2*m1*m2 +
+    100*xbar*m1 + 300*ybar*m2
+}
+
+cavi <- function(init, max_iter = 100, tol = 1e-5) {
+  m1 <- init[1]
+  m2 <- init[2]
+  history <- elbo(m1, m2)
+
+  for (t in 1:max_iter) {
+    m1 <- (100*xbar - 2*m2)/103
+    m2 <- (300*ybar - 2*m1)/303
+    history <- c(history, elbo(m1, m2))
+    if (abs(history[length(history)] -
+            history[length(history)-1]) < tol) break
+  }
+
+  list(mean = c(mu1 = m1, mu2 = m2),
+       variance = c(mu1 = 1/103, mu2 = 1/303),
+       elbo = history, iterations = length(history)-1)
+}
+
+vi1 <- cavi(c(0, 0))
+vi2 <- cavi(c(2, -1))
+
+results <- data.frame(
+  Run = c("Run 1", "Run 2"),
+  Initial_mu1 = c(0, 2),
+  Initial_mu2 = c(0, -1),
+  Iterations = c(vi1$iterations, vi2$iterations),
+  Mean_mu1 = c(vi1$mean[1], vi2$mean[1]),
+  Mean_mu2 = c(vi1$mean[2], vi2$mean[2]),
+  ELBO = c(tail(vi1$elbo, 1), tail(vi2$elbo, 1))
+)
+print(results, row.names = FALSE, digits = 8)
+```
+```{r}
+#| fig-cap: Figure 5. ELBO values across CAVI iterations for two runs initialised at \((0,0)\) and \((2,-1)\), respectively.
+cols <- c("#7545B5", "#D55E00")
+ylim_elbo <- range(vi1$elbo, vi2$elbo)
+
+par(mfrow = c(1, 2), mar = c(4, 4, 2.5, 1),
+    las = 1, cex.axis = 0.9, cex.lab = 0.95, cex.main = 0.95)
+
+plot(0:vi1$iterations, vi1$elbo, type = "b", pch = 16,
+     col = cols[1], lwd = 2, ylim = ylim_elbo,
+     xlab = "Iteration", ylab = "ELBO", main = "CAVI: Run 1")
+
+plot(0:vi2$iterations, vi2$elbo, type = "b", pch = 16,
+     col = cols[2], lwd = 2, ylim = ylim_elbo,
+     xlab = "Iteration", ylab = "ELBO", main = "CAVI: Run 2")
+
+par(mfrow = c(1, 1), las = 0,
+    cex.axis = 1, cex.lab = 1, cex.main = 1)
+```
+```{r}
+c(Run1 = all(diff(vi1$elbo) >= -1e-10),
+  Run2 = all(diff(vi2$elbo) >= -1e-10))
+
+runs <- list(vi1, vi2)
+best <- which.max(sapply(runs, function(z) tail(z$elbo, 1)))
+best_run <- runs[[best]]
+
+cat("Selected run:", best, "\n")
+cat("Initial values:",
+    if (best == 1) "(0, 0)" else "(2, -1)", "\n")
+cat("Iterations:", best_run$iterations, "\n")
+cat("Final ELBO:", tail(best_run$elbo, 1), "\n")
+print(round(best_run$mean, 6))
+print(round(best_run$variance, 6))
+```
+The ELBO increases monotonically in both runs, with convergence achieved after three iterations. Despite the different initial values, both runs produce essentially identical final ELBO values (1860.3418) and variational means, indicating stable convergence.
+
+Run 2, initialised at \((2,-1)\), attains the highest unrounded final ELBO and is therefore selected. The resulting optimal variational factors are
+
+$$
+q_{\mu_1}^*(\mu_1)=N(2.710268,\ 1/103),
+\qquad
+q_{\mu_2}^*(\mu_2)=N(-3.145637,\ 1/303).
+$$
+

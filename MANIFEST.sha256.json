@@ -1,0 +1,19 @@
+{
+  ".gitignore": "f01fb1ac106a60f4dafde3e3b7777a33acbd0e79560a274c7f84a34aea8fd6a7",
+  "analysis.qmd": "bd7bc1d9d10aaf6e2d29ca9d0a852097aa781a5a6323681b5a3a02ea932d74db",
+  "data/group-x.txt": "a679da6b2b6d12257a30fad116bb5ef148605d5a935b425fb156c6acac27535e",
+  "data/group-y.txt": "e5c2bc8a71787fa7ce555ed994306a5b8040796996392b97ef15cd5c3c8f76f6",
+  "data/scores.txt": "fa572a62a7d75848c52a8a229cbb7b31f9ad4c082878e608457a674f5fd1e0f2",
+  "docs/CONTRIBUTIONS.md": "65d1d9a0a53a8d86c555c571b47f06ca990484cd0b4f6ae8fa4317a59f60d58f",
+  "docs/REVIEW.md": "b8461b29e95959c148cd286e7bd71b5b26cbf76b73cfb82120a512257e7734e2",
+  "README.md": "5b40f9edff106e04ab1a6ac678a7069ec219db3cd11bc0f75d6538d7c6b384c8",
+  "results/diagnostic-01.png": "77e126b64853adba2840f9baeed533b851464f8223356be10fef0c81a986c9c7",
+  "results/diagnostic-02.png": "bd2550497f0fb12c8d6d1e811fbbe4f7fca8ea33710bef2fd6b9cd0c7d1b29d3",
+  "results/diagnostic-03.png": "8f01e0230cc1ab88ed7c7cfacf7db3ece7fe24fb45a776b4dd093e8f50ad0989",
+  "results/diagnostic-04.png": "86ff4adf338df02ae6e0e81b37078256eea45fc2b54e9c02999f6eeeb9a98b2f",
+  "results/diagnostic-05.png": "2b0fd9901fa18643a4d8754ef0cd30238edff02f0f9842aa949c3d306f37d8e9",
+  "results/posterior-summary.csv": "5cc0c595d60f7e46a1e766a0f42669125f1c43017b740cbd77ba1c72eee28a52",
+  "results/validation.txt": "02eac209b9144a0b51ce60450193a32bb12b9b1a62d928a7e6fcf7c362269332",
+  "results/variance-comparison.csv": "af0e5c0b2cacd828fd29d32a8d068f881878c532e7bbf6752e735814b49b016a",
+  "run_analysis.R": "52ac1071349e487594371159ef78bee9cfb418130f0ca44563504effcb269f03"
+}
