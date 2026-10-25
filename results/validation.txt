@@ -1,0 +1,5 @@
+R version: 4.5.2
+Exact CAVI mean checks: PASS
+Both ELBO sequences nondecreasing: PASS
+Both Monte Carlo means within five batch-means MCSE of exact target: PASS
+MH acceptance: 0.4305 0.42725
